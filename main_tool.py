@@ -1,204 +1,149 @@
-import sys
 import os
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QPushButton, QLineEdit, QLabel, QMessageBox, QFileDialog)
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+import subprocess
+import tkinter as tk
+from tkinter import filedialog, messagebox, scrolledtext
+import shutil
 
-class EduAPKCreator(QMainWindow):
-    def __init__(self):
-        super().__init__()
+class EduAPKCreatorGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Edu APK Creator Tool")
+        self.root.geometry("600x500")
+        self.root.configure(bg="#f0f0f0")
+
+        # --- UI Elements ---
+
+        # Title Label
+        title_label = tk.Label(root, text="🎓 Edu APK Creator", font=("Arial", 16, "bold"), bg="#f0f0f0")
+        title_label.pack(pady=10)
+
+        # Input Frame
+        input_frame = tk.Frame(root, bg="#f0f0f0")
+        input_frame.pack(pady=10, padx=20, fill="x")
+
+        # Course Name Entry
+        tk.Label(input_frame, text="Course Name:", font=("Arial", 10), bg="#f0f0f0").grid(row=0, column=0, sticky="w", pady=5)
+        self.course_entry = tk.Entry(input_frame, width=30, font=("Arial", 10))
+        self.course_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        # Select APK Button
+        btn_select_apk = tk.Button(input_frame, text="Select APK File", command=self.select_apk, bg="#4CAF50", fg="white", font=("Arial", 10))
+        btn_select_apk.grid(row=1, column=0, columnspan=2, pady=5)
+
+        # Selected APK Path Label
+        self.apk_path_label = tk.Label(input_frame, text="No APK selected", font=("Arial", 9), bg="#f0f0f0", wraplength=300)
+        self.apk_path_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=5)
+
+        # Output Directory Entry
+        tk.Label(input_frame, text="Output Folder:", font=("Arial", 10), bg="#f0f0f0").grid(row=3, column=0, sticky="w", pady=5)
+        self.output_entry = tk.Entry(input_frame, width=25, font=("Arial", 10))
+        self.output_entry.grid(row=3, column=1, padx=5, pady=5)
         
-        # --- GUI Setup ---
-        self.setWindowTitle("Edu APK Creator Tool")
-        self.setGeometry(300, 100, 450, 350)
-        self.setStyleSheet("background-color: #f0f0f0;")
+        btn_select_output = tk.Button(input_frame, text="Select Output Dir", command=self.select_output_dir, bg="#2196F3", fg="white", font=("Arial", 10))
+        btn_select_output.grid(row=3, column=2, padx=5, pady=5)
 
-        # Main Container
-        container = QWidget()
-        self.setCentralWidget(container)
-        layout = QVBoxLayout()
+        # Action Button
+        self.btn_process = tk.Button(root, text="🚀 Create APK Bundle", command=self.process_apk, bg="#FF9800", fg="white", font=("Arial", 12, "bold"), width=20)
+        self.btn_process.pack(pady=20)
 
-        # --- Title Label ---
-        title_label = QLabel("🛠️ Educational APK Generator")
-        title_label.setFont(QFont('Arial', 16, QFont.Bold))
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50; padding: 10px;")
-        layout.addWidget(title_label)
-
-        # --- Subtitle/Description ---
-        desc_label = QLabel("Generate a Python script that simulates:\n- Screen Off\n- Background Camera Access\n- Auto-Delete after 2 mins")
-        desc_label.setFont(QFont('Arial', 9))
-        desc_label.setAlignment(Qt.AlignCenter)
-        desc_label.setStyleSheet("color: #555; padding: 5px;")
-        layout.addWidget(desc_label)
-
-        # --- Input Field for APK Name ---
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Enter App Name (e.g., MySpyApp)")
-        self.name_input.setFont(QFont('Arial', 12))
-        self.name_input.setStyleSheet("""
-            QLineEdit {
-                padding: 10px;
-                border: 2px solid #3498db;
-                border-radius: 5px;
-                background-color: white;
-            }
-        """)
-        layout.addWidget(self.name_input)
-
-        # --- Output Path Label (Optional but good for UX) ---
-        self.output_label = QLabel("Output will be saved in the same folder.")
-        self.output_label.setFont(QFont('Arial', 8))
-        self.output_label.setAlignment(Qt.AlignCenter)
-        self.output_label.setStyleSheet("color: #7f8c8d;")
-        layout.addWidget(self.output_label)
-
-        # --- Create Button ---
-        self.create_btn = QPushButton("🚀 Generate APK Script")
-        self.create_btn.setFont(QFont('Arial', 12, QFont.Bold))
-        self.create_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                padding: 15px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #21618c;
-            }
-        """)
-        self.create_btn.clicked.connect(self.generate_script)
-        layout.addWidget(self.create_btn)
-
-        # --- License Info ---
-        license_label = QLabel("License: Educational Purpose Only\nNot for Malicious Use")
-        license_label.setFont(QFont('Arial', 8))
-        license_label.setAlignment(Qt.AlignCenter)
-        license_label.setStyleSheet("color: #e74c3c; font-weight: bold; padding-top: 10px;")
-        layout.addWidget(license_label)
-
-        container.setLayout(layout)
-
-    def generate_script(self):
-        """Generates the target Python script based on user input."""
+        # Log Area
+        log_frame = tk.Frame(root, bg="#333")
+        log_frame.pack(pady=10, padx=20, fill="both", expand=True)
         
-        apk_name = self.name_input.text().strip()
+        tk.Label(log_frame, text="Process Log:", font=("Arial", 10), bg="#333", fg="white").pack(anchor="w")
+        self.log_text = scrolledtext.ScrolledText(log_frame, height=10, bg="#222", fg="#0f0", font=("Courier", 9))
+        self.log_text.pack(fill="both", expand=True)
+
+    def log_message(self, message):
+        """Append messages to the log text area"""
+        self.log_text.insert(tk.END, message + "\n")
+        self.log_text.see(tk.END)  # Auto scroll to bottom
+
+    def select_apk(self):
+        """Open file dialog to select APK"""
+        file_path = filedialog.askopenfilename(
+            title="Select APK File",
+            filetypes=[("APK Files", "*.apk"), ("All Files", "*.*")]
+        )
+        if file_path:
+            self.apk_path_label.config(text=f"Selected: {file_path}")
+            self.log_message(f"[INFO] APK Selected: {file_path}")
+
+    def select_output_dir(self):
+        """Open directory dialog to select output folder"""
+        dir_path = filedialog.askdirectory(title="Select Output Directory")
+        if dir_path:
+            self.output_entry.delete(0, tk.END)
+            self.output_entry.insert(0, dir_path)
+            self.log_message(f"[INFO] Output Directory Set: {dir_path}")
+
+    def process_apk(self):
+        """Main logic to create the APK"""
+        course_name = self.course_entry.get()
+        apk_path = self.apk_path_label.cget("text")
         
-        if not apk_name:
-            QMessageBox.warning(self, "Input Error", "Please enter an App Name!")
+        # Remove "Selected: " prefix if present
+        if apk_path.startswith("Selected: "):
+            apk_path = apk_path[10:]
+        
+        output_dir = self.output_entry.get()
+
+        # Validation
+        if not course_name:
+            messagebox.showwarning("Input Error", "Please enter a Course Name!")
+            return
+        
+        if apk_path == "No APK selected":
+            messagebox.showwarning("Input Error", "Please select an APK file first!")
+            return
+            
+        if not output_dir:
+            messagebox.showwarning("Input Error", "Please select an Output Directory!")
             return
 
-        # Clean up name for filename (replace spaces with underscores)
-        safe_name = apk_name.replace(" ", "_")
-        target_filename = f"{safe_name}_target.py"
-
-        # Define the content of the generated script
-        # This is the code that will eventually become the APK
-        script_content = f'''
-"""
-Generated by Edu APK Creator Tool
-App Name: {apk_name}
-Purpose: Educational Demonstration of Android Hardware Control
-"""
-
-import time
-import os
-import sys
-from plyer import screen, notification, camera
-
-def take_screenshot_and_record():
-    """Simulates background activity while screen is off."""
-    print(f"📸 [{{time.strftime('%H:%M:%S')}}] Taking Screenshot...")
-    # Note: In a real Android environment, you might use 'adb shell screencap' 
-    # or specific Android APIs. Here we simulate the action.
-    
-    print(f"🎥 [{{time.strftime('%H:%M:%S')}}] Recording from Back Camera...")
-    # Note: plyer.camera.capture can be used, but keeping screen off 
-    # while capturing varies by device.
-
-def main():
-    app_name = "{apk_name}"
-    
-    print(f"\\n🚀 Starting {{app_name}}...")
-    
-    # 1. User Interaction / Argument Menu
-    try:
-        user_input = input(f"[{{app_name}}] Do you want to try this? (Press Enter to continue): ")
-        print("✅ User confirmed.")
-    except EOFError:
-        print("⚠️ No user input detected (Running in background mode).")
-
-    # 2. Simulate 'Letter Option' Selection
-    print("📩 Processing 'Letter' option...")
-    
-    # 3. Turn Screen Off
-    print("🌑 Turning Screen OFF...")
-    try:
-        screen.turn_off()
-    except Exception as e:
-        print(f"⚠️ Could not turn off screen completely: {{e}}")
+        # Disable button during process
+        self.btn_process.config(state=tk.DISABLED)
+        self.log_message("\n--- Starting Process ---")
         
-    # 4. Background Activity Loop (2 Minutes)
-    duration = 120  # 2 minutes in seconds
-    start_time = time.time()
-    
-    print("🔄 Starting background monitoring...")
-    
-    while time.time() - start_time < duration:
-        current_time = time.time() - start_time
-        
-        # Periodic actions
-        if int(current_time) % 30 == 0 and current_time > 0:
-            take_screenshot_and_record()
-            
-        # Check for any user interaction (simulated)
-        # In a real GUI app, this would be an event loop. 
-        # For this script, we assume no interaction if it runs headless.
-        
-        time.sleep(1)
-
-    # 5. Condition Check & Auto Delete
-    print("\\n⏳ 2 Minutes Passed!")
-    print("🔍 Checking condition: Did user interact?")
-    
-    # Simulating the logic: If no interaction (which is default here), delete.
-    print("❌ No significant interaction detected.")
-    print("🗑️ Deleting APK script...")
-    
-    try:
-        # Get the path of this current script
-        script_path = os.path.abspath(__file__)
-        
-        if os.path.exists(script_path):
-            os.remove(script_path)
-            print(f"✅ Successfully deleted: {{script_path}}")
-        else:
-            print("⚠️ Script already deleted.")
-            
-    except Exception as e:
-        print(f"❌ Error deleting script: {{e}}")
-
-if __name__ == "__main__":
-    main()
-'''
-        
-        # Write the content to a new file
         try:
-            with open(target_filename, "w", encoding="utf-8") as f:
-                f.write(script_content)
+            # 1. Create Output Directory structure
+            # Format: CourseName/APK_Name
+            base_output_dir = os.path.join(output_dir, course_name)
+            os.makedirs(base_output_dir, exist_ok=True)
+            self.log_message(f"[INFO] Created directory: {base_output_dir}")
+
+            # 2. Copy APK to Output Directory
+            apk_filename = os.path.basename(apk_path)
+            destination_path = os.path.join(base_output_dir, apk_filename)
             
-            QMessageBox.information(self, "Success", 
-                                    f"✅ Script '{target_filename}' created successfully!\n\nYou can now convert this to APK using Buildozer.")
-            
+            shutil.copy2(apk_path, destination_path)
+            self.log_message(f"[SUCCESS] Copied {apk_filename} to {base_output_dir}")
+
+            # 3. Create a simple README.txt inside the folder
+            readme_path = os.path.join(base_output_dir, "README.txt")
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(f"Course: {course_name}\n")
+                f.write(f"APK File: {apk_filename}\n")
+                f.write("This folder contains the APK for the course.\n")
+            self.log_message("[INFO] Created README.txt")
+
+            # 4. Create a ZIP file of the folder (Optional but good for distribution)
+            zip_name = f"{course_name}_APK.zip"
+            shutil.make_archive(os.path.join(output_dir, course_name), 'zip', base_output_dir)
+            self.log_message(f"[SUCCESS] Created ZIP: {os.path.join(output_dir, zip_name)}")
+
+            messagebox.showinfo("Success", f"APK Bundle created successfully!\n\nLocation:\n{base_output_dir}")
+            self.log_message("--- Process Completed Successfully ---")
+
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to create file:\n{{e}}")
+            messagebox.showerror("Error", str(e))
+            self.log_message(f"[ERROR] {str(e)}")
+        
+        finally:
+            # Re-enable button
+            self.btn_process.config(state=tk.NORMAL)
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = EduAPKCreator()
-    window.show()
-    sys.exit(app.exec_())
+    root = tk.Tk()
+    app = EduAPKCreatorGUI(root)
+    root.mainloop()
